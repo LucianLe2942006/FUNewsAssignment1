@@ -1,3 +1,9 @@
+/**
+ * Họ và tên: Lê Nhựt Huy
+ * Mã SV: CE200376
+ * Lớp: SE1910
+ */
+
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 

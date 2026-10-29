@@ -1,3 +1,9 @@
+/**
+ * Họ và tên: Lê Nhựt Huy
+ * Mã SV: CE200376
+ * Lớp: SE1910
+ */
+
 export const defaultCategories = [
   { id: 1, name: "Technology", status: 1 },
   { id: 2, name: "Campus Life", status: 1 },

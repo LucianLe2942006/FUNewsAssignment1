@@ -1,3 +1,9 @@
+/**
+ * Họ và tên: Lê Nhựt Huy
+ * Mã SV: CE200376
+ * Lớp: SE1910
+ */
+
 function Sidebar({ activeMenu, onSelectMenu }) {
   const menuItems = [
     { key: "dashboard", label: "Dashboard" },

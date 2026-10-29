@@ -1,3 +1,9 @@
+/**
+ * Họ và tên: Lê Nhựt Huy
+ * Mã SV: CE200376
+ * Lớp: SE1910
+ */
+
 import logo from "../../assets/logo.png";
 
 function Header({ currentUser, onLogout }) {

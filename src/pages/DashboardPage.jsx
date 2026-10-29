@@ -1,3 +1,9 @@
+/**
+ * Họ và tên: Lê Nhựt Huy
+ * Mã SV: CE200376
+ * Lớp: SE1910
+ */
+
 function DashboardPage({ categories = [], news = [], users = [] }) {
   const activeCategoriesCount = categories.filter((c) => c.status === 1).length;
   const inactiveCategoriesCount = categories.filter((c) => c.status === 0).length;

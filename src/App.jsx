@@ -1,3 +1,9 @@
+/**
+ * Họ và tên: Lê Nhựt Huy
+ * Mã SV: CE200376
+ * Lớp: SE1910
+ */
+
 import { useState, useEffect } from "react";
 import LoginPage from "./pages/LoginPage";
 import AdminLayout from "./components/layout/AdminLayout";

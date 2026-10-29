@@ -1,3 +1,9 @@
+/**
+ * Họ và tên: Lê Nhựt Huy
+ * Mã SV: CE200376
+ * Lớp: SE1910
+ */
+
 function ConfirmDialog({ isOpen, title = "Confirm Action", message, onConfirm, onCancel }) {
   if (!isOpen) return null;
 
