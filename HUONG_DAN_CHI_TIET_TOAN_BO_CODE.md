@@ -30,6 +30,15 @@ Lớp: SE1910
 7. [Điểm khởi động ứng dụng: `src/main.jsx`](#7-điểm-khởi-động-ứng-dụng-srcmainjsx)
 8. [Cẩm nang hướng dẫn tự chỉnh sửa code (Thực hành thực tế)](#8-cẩm-nang-hướng-dẫn-tự-chỉnh-sửa-code)
 9. [Bảng tra cứu nhanh toàn bộ Biến & Hàm](#9-bảng-tra-cứu-nhanh-toàn-bộ-biến--hàm)
+10. [Cẩm nang kết nối Front-End (React) với Back-End (Spring Boot REST API)](#10-cẩm-nang-kết-nối-front-end-react-với-back-end-spring-boot-rest-api)
+    - [10.1. Bảng quy đổi tư duy: Back-End (Spring Boot) vs Front-End (React)](#101-bảng-quy-đổi-tư-duy-back-end-spring-boot-vs-front-end-react)
+    - [10.2. Ba bước cốt lõi kết nối React với Spring Boot REST API](#102-ba-bước-cốt-lõi-kết-nối-react-với-spring-boot-rest-api)
+    - [10.3. Ba "bẫy" phổ biến nhất dân Back-End hay gặp khi làm Front-End](#103-ba-bẫy-phổ-biến-nhất-dân-back-end-hay-gặp-khi-làm-front-end)
+    - [10.4. Ví dụ thực chiến: Chuyển đổi mã nguồn Assignment 1 sang gọi REST API](#104-ví-dụ-thực-chiến-chuyển-đổi-mã-nguồn-assignment-1-sang-gọi-rest-api)
+11. [Phân tích bảo mật: AuthController có thực sự hiệu quả khi gọi trực tiếp API?](#11-phân-tích-bảo-mật-authcontroller-có-thực-sự-hiệu-quả-khi-gọi-trực-tiếp-api)
+    - [11.1. Bản chất AuthController hiện tại (Assignment 02)](#111-bản-chất-authcontroller-hiện-tại-assignment-02)
+    - [11.2. Thử nghiệm thực tế: Gọi trực tiếp qua Postman / cURL](#112-thử-nghiệm-thực-tế-gọi-trực-tiếp-qua-postman--curl)
+    - [11.3. Cơ chế bảo vệ toàn diện ở Assignment 03 (Spring Security + JWT)](#113-cơ-chế-bảo-vệ-toàn-diện-ở-assignment-03-spring-security--jwt)
 
 ---
 
@@ -571,4 +580,258 @@ Dưới đây là các tình huống thực tế thường gặp và hướng d�
 > npm run dev
 > ```
 > Trình duyệt sẽ tự động cập nhật ngay lập tức những thay đổi của bạn mà không cần phải khởi động lại!
+
+---
+
+## 10. Cẩm nang kết nối Front-End (React) với Back-End (Spring Boot REST API)
+
+Dành cho các kỹ sư Back-End đang làm quen với thế giới Front-End ReactJS: Về bản chất, việc kết nối giữa hai bên chỉ xoay quanh đúng một thao tác: **Gửi và Nhận HTTP Request chứa dữ liệu JSON qua mạng**.
+
+### 10.1. Bảng quy đổi tư duy: Back-End (Spring Boot) vs Front-End (React)
+
+| Khái niệm Back-End (Spring Boot) | Khái niệm tương đương ở Front-End (React) | Bản chất vận hành |
+| :--- | :--- | :--- |
+| **`@GetMapping("/api/categories")`** | `axios.get('/api/categories')` / `fetch(...)` | Front-End gửi yêu cầu HTTP xin dữ liệu |
+| **`List<CategoryDTO>` (JSON trả về)** | **`const [categories, setCategories] = useState([])`** | Biến State hứng dữ liệu JSON để React tự vẽ các dòng bảng `<tr>` |
+| **`@RequestBody CategoryRequest`** | Payload body: `JSON.stringify(formData)` | Gói dữ liệu từ Form nhập liệu gửi lên Back-End |
+| **Database (SQL Server / MySQL)** | **State (`useState`)** | Front-End không có DB; chỉ lưu dữ liệu trên RAM (State) để vẽ UI |
+| **Database Persistence (Lưu trữ bền vững)** | **Gọi REST API sang Back-End để BE lưu DB** | Khi F5 tải lại trang, FE chỉ việc gọi lại API `GET` để lấy dữ liệu mới nhất |
+| **`@PostConstruct` / Khởi tạo dữ liệu** | **`useEffect(() => { ... }, [])`** | Đoạn code chạy tự động đúng 1 lần khi màn hình vừa mở lên |
+
+---
+
+### 10.2. Ba bước cốt lõi kết nối React với Spring Boot REST API
+
+Mô hình giao tiếp thực tế:
+```
+[React Front-End] (Port 5173)                                  [Spring Boot Back-End] (Port 8080)
+      |                                                                       |
+      |--- 1. HTTP GET http://localhost:8080/api/categories ----------------->| (@GetMapping)
+      |                                                                       |  Truy vấn SQL Database qua JPA
+      |<-- 2. HTTP 200 OK kèm JSON: [{id: 1, name: "Technology"}, ...] ------|
+      |
+      | 3. setCategories(res.data) 
+      |    => React tự động render danh sách lên Table
+```
+
+#### Bước 1: Cho phép Front-End gọi tới Back-End (Cấu hình CORS phía Spring Boot)
+Do React chạy ở cổng 5173 và Spring Boot chạy ở cổng 8080 (khác Origin), trình duyệt sẽ kích hoạt cơ chế chặn CORS nếu chưa được cấp phép.
+Cấu hình chuẩn trên Spring Boot (`CorsConfig.java`):
+```java
+@Configuration
+public class CorsConfig {
+    @Bean
+    public WebMvcConfigurer corsConfigurer() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(CorsRegistry registry) {
+                registry.addMapping("/api/**")
+                        .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*")
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedHeaders("*")
+                        .allowCredentials(true);
+            }
+        };
+    }
+}
+```
+
+#### Bước 2: Thiết lập Tầng Dịch vụ API ở Front-End (`src/services/`)
+Tạo một client gọi API tập trung sử dụng thư viện `axios`:
+```javascript
+// src/services/apiClient.js
+import axios from 'axios';
+
+const apiClient = axios.create({
+  baseURL: 'http://localhost:8080/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+export default apiClient;
+```
+
+Tạo service riêng cho từng nghiệp vụ (tương tự Service Layer trong Java):
+```javascript
+// src/services/categoryService.js
+import apiClient from './apiClient';
+
+export const categoryService = {
+  getAll: (search) => apiClient.get('/categories', { params: { search } }),
+  getById: (id) => apiClient.get(`/categories/${id}`),
+  create: (data) => apiClient.post('/categories', data),
+  update: (id, data) => apiClient.put(`/categories/${id}`, data),
+  delete: (id) => apiClient.delete(`/categories/${id}`),
+};
+```
+
+#### Bước 3: Đưa dữ liệu vào Component React bằng Hooks
+
+**A. Đọc dữ liệu tự động khi component hiển thị (`useEffect`):**
+```jsx
+import { useState, useEffect } from 'react';
+import { categoryService } from '../services/categoryService';
+
+export default function CategoryManagement() {
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Mảng rỗng [] ở tham số thứ hai tương đương khởi tạo 1 lần
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await categoryService.getAll();
+      setCategories(res.data); // Nhận List<CategoryDTO> từ Spring Boot
+    } catch (err) {
+      console.error("Lỗi khi tải danh mục:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      {loading ? <p>Đang tải dữ liệu...</p> : (
+        <table>
+          <tbody>
+            {categories.map((item) => (
+              <tr key={item.categoryId}>
+                <td>{item.categoryName}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+```
+
+**B. Gửi dữ liệu khi người dùng Thêm mới hoặc Cập nhật:**
+```jsx
+const handleFormSubmit = async (e) => {
+  e.preventDefault();
+  try {
+    const payload = { categoryName: formName, categoryDescription: formDesc, isActive: true };
+    const res = await categoryService.create(payload);
+    
+    // Thêm record vừa tạo vào mảng state để giao diện cập nhật ngay lập tức
+    setCategories([...categories, res.data]);
+    alert("Thêm danh mục thành công!");
+  } catch (err) {
+    alert("Thất bại: " + (err.response?.data?.message || err.message));
+  }
+};
+```
+
+---
+
+### 10.3. Ba "bẫy" phổ biến nhất dân Back-End hay gặp khi làm Front-End
+
+1. **Lỗi CORS (Cross-Origin Resource Sharing):**
+   - *Triệu chứng:* Console trình duyệt báo đỏ: `Access to XMLHttpRequest ... has been blocked by CORS policy`.
+   - *Khắc phục:* Đảm bảo Spring Boot đã có cấu hình `WebMvcConfigurer` (như ở mục 10.2).
+2. **State trong React cập nhật bất đồng bộ:**
+   - *Hiện tượng:* Sau khi gọi `setCategories(newList); console.log(categories);`, biến `categories` vẫn mang giá trị cũ!
+   - *Lý do:* React gom các cập nhật state lại và render ở chu kỳ kế tiếp. Muốn làm việc với dữ liệu mới ngay trong cùng hàm, hãy dùng biến tạm `newList`.
+3. **Quản lý Token xác thực:**
+   - Khi login thành công, lưu token vào trình duyệt: `localStorage.setItem('accessToken', token);`.
+   - Gắn Interceptor để tự động gắn `Authorization: Bearer <token>` vào mọi request tiếp theo.
+
+---
+
+### 10.4. Ví dụ thực chiến: Chuyển đổi mã nguồn Assignment 1 sang gọi REST API
+
+| Thao tác trong Assignment 1 (Mock / `localStorage`) | Thao tác tương ứng khi tích hợp Spring Boot (Assignment 2) |
+| :--- | :--- |
+| `getStoredData("funews_categories", defaultCategories)` | `await categoryService.getAll()` |
+| `setCategories([...categories, newCategory])` kèm `setStoredData` | `const res = await categoryService.create(formData); setCategories([...categories, res.data]);` |
+| `categories.filter(c => c.id !== deleteTarget.id)` | `await categoryService.delete(deleteTarget.id); setCategories(categories.filter(...));` |
+
+---
+
+## 11. Phân tích bảo mật: AuthController có thực sự hiệu quả khi gọi trực tiếp API?
+
+### 11.1. Bản chất AuthController hiện tại (Assignment 02)
+
+Trong mã nguồn Assignment 02:
+```java
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        LoginResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
+    }
+}
+```
+
+> ⚠️ **ĐÁNH GIÁ THỰC TẾ: HOÀN TOÀN KHÔNG CÓ HIỆU QUẢ BẢO VỆ BACK-END!**
+
+**Tại sao?**
+1. **Chỉ là "công cụ đối soát mật khẩu":** `AuthController` này chỉ làm mỗi một việc: nhận `email` + `password`, kiểm tra xem trong database có khớp không, và trả về thông tin `LoginResponse` (accountId, accountName, accountRole).
+2. **Không hề phát hành Token bảo mật:** Hệ thống không sinh chuỗi JWT có chữ ký điện tử, cũng không tạo phiên làm việc bảo mật (Session Cookie `JSESSIONID`).
+3. **Các Controller nghiệp vụ không có "người gác cổng" (Filter):**
+   - Các API như `GET /api/categories`, `POST /api/news`, `DELETE /api/accounts/{id}` **hoàn toàn mở toang (Public Endpoints)**.
+   - Không có bất kỳ Interceptor hay Security Filter nào chặn trước các Controller này để hỏi: *"Bạn là ai? Token của bạn đâu? Bạn có quyền Admin không?"*.
+
+---
+
+### 11.2. Thử nghiệm thực tế: Gọi trực tiếp qua Postman / cURL
+
+Nếu ai đó không mở web React, mà dùng Postman hoặc Terminal gõ lệnh:
+```bash
+# 1. Lấy toàn bộ danh sách tài khoản quản trị mà KHÔNG CẦN ĐĂNG NHẬP
+curl -X GET http://localhost:8080/api/accounts
+
+# 2. Xóa sạch chuyên mục tin tức trong Database mà KHÔNG CẦN ĐĂNG NHẬP
+curl -X DELETE http://localhost:8080/api/categories/1
+```
+👉 **Kết quả:** Back-End vẫn trả về dữ liệu và thực hiện lệnh xóa thành công 100%!
+
+**Cơ chế đăng nhập hiện tại chỉ là "ổ khóa đồ chơi" ở phía Front-End:**
+- Sau khi bấm Login trên React, React lưu thông tin user vào `localStorage.setItem('user', JSON.stringify(res.data))`.
+- Trong React có đoạn kiểm tra: `if (!currentUser) return <LoginPage />`.
+- Đây chỉ là **Client-side UI Guard** (che giấu giao diện đối với người dùng thông thường qua trình duyệt). Bất kỳ ai biết F12 sửa biến JavaScript hoặc dùng Postman đều bypass qua dễ dàng.
+
+---
+
+### 11.3. Cơ chế bảo vệ toàn diện ở Assignment 03 (Spring Security + JWT)
+
+Trong môn học SBA301, lộ trình được thiết kế theo từng bước:
+- **Assignment 01:** Luyện dựng Front-End ReactJS hoàn chỉnh (Mock data).
+- **Assignment 02:** Luyện kết nối RESTful API CRUD giữa ReactJS và Spring Boot (chưa yêu cầu Security để giảm độ phức tạp).
+- **Assignment 03:** **Securing REST Services with Spring Boot** – Đây mới là lúc xây dựng "bức tường thành" bảo mật thật sự.
+
+**Kiến trúc bảo mật thực sự (Assignment 03):**
+```
+Client (Postman / React)
+       |
+       v  [Gửi kèm Header: Authorization: Bearer <jwt_token>]
+[ JwtAuthenticationFilter ] (Đứng chặn trước mọi Controller)
+       |
+       +---> [Không có Token hoặc Token giả] ---> Trả về HTTP 401 Unauthorized ngay lập tức!
+       |
+       +---> [Token hợp lệ nhưng Role = Staff cố gọi API Delete] ---> Trả về HTTP 403 Forbidden!
+       |
+       +---> [Hợp lệ và đúng quyền]
+                   |
+                   v
+          [ Target Controller: /api/categories ]
+```
+
+1. **Sinh JWT có chữ ký điện tử khi Login:** Khi email/password đúng, Server ký số bằng `HMAC-SHA256` kèm `SecretKey` bí mật của Server để tạo ra chuỗi JWT chứa thông tin `accountId` và `role`.
+2. **`JwtAuthenticationFilter` (hoặc `SecurityFilterChain`):** Mọi request gửi đến bất kỳ API nào đều phải chạy qua Filter này trước. Nếu không có header `Authorization: Bearer <jwt>`, request bị chặn đứng ngay ở tầng Filter, hoàn toàn không chạm được vào Controller.
+3. **Phân quyền phương thức (`@PreAuthorize`):**
+   ```java
+   @DeleteMapping("/{id}")
+   @PreAuthorize("hasRole('ADMIN')") // Chỉ có tài khoản role Admin mới được xóa
+   public ResponseEntity<?> deleteCategory(@PathVariable Short id) { ... }
+   ```
 
