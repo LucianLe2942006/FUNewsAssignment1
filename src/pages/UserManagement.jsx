@@ -8,23 +8,47 @@ import { useState } from "react";
 import Modal from "../components/common/Modal";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 
+/**
+ * Component UserManagement: Quản lý tài khoản người dùng hệ thống (CRUD + Kiểm tra trùng Username + Phân quyền)
+ * 
+ * @param {Object} props - Các props truyền vào component
+ * @param {Array} props.users - Danh sách người dùng hiện tại
+ * @param {Function} props.setUsers - Hàm setter cập nhật danh sách người dùng
+ * @param {Object} props.currentUser - Thông tin tài khoản người dùng đang đăng nhập
+ */
 function UserManagement({ users, setUsers, currentUser }) {
+  // State lưu từ khóa tìm kiếm theo tên đăng nhập (username)
   const [searchTerm, setSearchTerm] = useState("");
+
+  // State kiểm soát việc hiển thị modal Thêm/Sửa người dùng
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // State xác định chế độ modal: "create" (tạo mới tài khoản) hoặc "update" (chỉnh sửa tài khoản)
   const [modalMode, setModalMode] = useState("create");
+
+  // State lưu người dùng đang được chọn để chỉnh sửa
   const [selectedUser, setSelectedUser] = useState(null);
 
+  // State quản lý dữ liệu nhập liệu trên Form
   const [formData, setFormData] = useState({
     username: "",
     password: "",
-    role: 2,
-    status: 1
+    role: 2, // Mặc định role = 2 (Staff)
+    status: 1 // Mặc định status = 1 (Active)
   });
+
+  // State lưu thông báo lỗi kiểm tra hợp lệ của form (bỏ trống, trùng lặp username, v.v.)
   const [formError, setFormError] = useState("");
 
+  // State lưu người dùng đang được chọn để xóa
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // State kiểm soát hiển thị popup xác nhận xóa người dùng
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
+  /**
+   * Mở modal ở chế độ tạo tài khoản mới
+   */
   const handleOpenCreate = () => {
     setModalMode("create");
     setSelectedUser(null);
@@ -38,6 +62,10 @@ function UserManagement({ users, setUsers, currentUser }) {
     setIsModalOpen(true);
   };
 
+  /**
+   * Mở modal ở chế độ chỉnh sửa thông tin tài khoản
+   * @param {Object} user - Tài khoản cần sửa
+   */
   const handleOpenEdit = (user) => {
     setModalMode("update");
     setSelectedUser(user);
@@ -51,6 +79,9 @@ function UserManagement({ users, setUsers, currentUser }) {
     setIsModalOpen(true);
   };
 
+  /**
+   * Đóng modal và đặt lại dữ liệu form
+   */
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedUser(null);
@@ -63,16 +94,24 @@ function UserManagement({ users, setUsers, currentUser }) {
     setFormError("");
   };
 
+  /**
+   * Xử lý gửi biểu mẫu Thêm mới / Cập nhật tài khoản
+   * @param {React.FormEvent} e - Sự kiện form submit
+   */
   const handleFormSubmit = (e) => {
     e.preventDefault();
     const trimmedUsername = formData.username.trim();
     const trimmedPassword = formData.password.trim();
 
+    // Ràng buộc: Username và Password không được để trống
     if (!trimmedUsername || !trimmedPassword) {
       setFormError("Both Username and Password are required.");
       return;
     }
 
+    // Kiểm tra trùng tên đăng nhập:
+    // Nếu tạo mới: không được trùng với bất kỳ user nào trong hệ thống
+    // Nếu cập nhật: không được trùng với user khác (ngoại trừ chính tài khoản đang sửa)
     const duplicateUser = users.find(
       (u) =>
         (u.username || "").toLowerCase() === trimmedUsername.toLowerCase() &&
@@ -85,6 +124,7 @@ function UserManagement({ users, setUsers, currentUser }) {
     }
 
     if (modalMode === "create") {
+      // Tự động sinh ID kế tiếp
       const nextId = users.length > 0 ? Math.max(...users.map((u) => u.id)) + 1 : 1;
       const newUser = {
         id: nextId,
@@ -93,8 +133,10 @@ function UserManagement({ users, setUsers, currentUser }) {
         role: Number(formData.role),
         status: Number(formData.status)
       };
+      // Thêm tài khoản mới vào danh sách users
       setUsers([...users, newUser]);
     } else if (modalMode === "update" && selectedUser) {
+      // Cập nhật tài khoản hiện tại
       const updatedUsers = users.map((u) =>
         u.id === selectedUser.id
           ? {
@@ -109,14 +151,22 @@ function UserManagement({ users, setUsers, currentUser }) {
       setUsers(updatedUsers);
     }
 
+    // Đóng modal sau khi hoàn thành
     handleCloseModal();
   };
 
+  /**
+   * Mở hộp thoại xác nhận xóa tài khoản
+   * @param {Object} user - Tài khoản muốn xóa
+   */
   const handleOpenDelete = (user) => {
     setDeleteTarget(user);
     setIsConfirmOpen(true);
   };
 
+  /**
+   * Xác nhận thực hiện xóa tài khoản khỏi danh sách
+   */
   const handleConfirmDelete = () => {
     if (deleteTarget) {
       const updatedUsers = users.filter((u) => u.id !== deleteTarget.id);
@@ -126,18 +176,25 @@ function UserManagement({ users, setUsers, currentUser }) {
     setDeleteTarget(null);
   };
 
+  /**
+   * Hủy bỏ thao tác xóa tài khoản
+   */
   const handleCancelDelete = () => {
     setIsConfirmOpen(false);
     setDeleteTarget(null);
   };
 
+  // Chuẩn hóa từ khóa tìm kiếm
   const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  // Danh sách tài khoản được lọc theo từ khóa tìm kiếm
   const displayedUsers = users.filter((u) =>
     (u.username || "").toLowerCase().includes(normalizedSearch)
   );
 
   return (
     <div className="page-container">
+      {/* Tiêu đề trang và nút thêm tài khoản */}
       <div className="page-header">
         <div>
           <h2>User Management</h2>
@@ -148,6 +205,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         </button>
       </div>
 
+      {/* Thanh tìm kiếm tài khoản */}
       <div className="table-controls">
         <div className="search-bar">
           <input
@@ -169,6 +227,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         </div>
       </div>
 
+      {/* Bảng dữ liệu người dùng */}
       <div className="table-responsive">
         <table className="data-table">
           <thead>
@@ -195,6 +254,7 @@ function UserManagement({ users, setUsers, currentUser }) {
                   <td>#{user.id}</td>
                   <td className="font-medium">
                     {user.username}{" "}
+                    {/* Đánh dấu badge (You) nếu dòng này là tài khoản đang đăng nhập */}
                     {(currentUser?.username || "").toLowerCase() === (user.username || "").toLowerCase() && (
                       <span className="badge badge-info">(You)</span>
                     )}
@@ -225,6 +285,7 @@ function UserManagement({ users, setUsers, currentUser }) {
                     >
                       Edit
                     </button>
+                    {/* Nút xóa bị vô hiệu hóa (disabled) nếu là tài khoản đang đăng nhập để tránh tự xóa chính mình */}
                     <button
                       type="button"
                       className="btn btn-sm btn-danger-outline"
@@ -246,6 +307,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         </table>
       </div>
 
+      {/* Modal Thêm mới / Cập nhật tài khoản */}
       <Modal
         isOpen={isModalOpen}
         title={modalMode === "create" ? "Create User Account" : "Edit User Account"}
@@ -254,6 +316,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         <form onSubmit={handleFormSubmit} className="modal-form">
           {formError && <div className="alert alert-error">{formError}</div>}
 
+          {/* Ô nhập Username */}
           <div className="form-group">
             <label htmlFor="userUsername">Username *</label>
             <input
@@ -269,6 +332,7 @@ function UserManagement({ users, setUsers, currentUser }) {
             />
           </div>
 
+          {/* Ô nhập Password */}
           <div className="form-group">
             <label htmlFor="userPassword">Password *</label>
             <input
@@ -284,6 +348,7 @@ function UserManagement({ users, setUsers, currentUser }) {
             />
           </div>
 
+          {/* Chọn Role và Status */}
           <div className="form-row">
             <div className="form-group form-col">
               <label htmlFor="userRole">Role</label>
@@ -315,6 +380,7 @@ function UserManagement({ users, setUsers, currentUser }) {
             </div>
           </div>
 
+          {/* Nút hành động trong Modal */}
           <div className="modal-footer">
             <button
               type="button"
@@ -330,6 +396,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         </form>
       </Modal>
 
+      {/* Hộp thoại xác nhận xóa tài khoản */}
       <ConfirmDialog
         isOpen={isConfirmOpen}
         title="Delete User Account"
